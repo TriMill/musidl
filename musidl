@@ -1,0 +1,176 @@
+#!/bin/bash
+
+# musidl - download music from YouTube
+# Copyright (C) 2021 TriMill
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+# check to make sure all commands are available before running
+if ! (command -v "youtube-dl" && command -v "jq" && command -v "id3v2") &>/dev/null; then
+    >&2 echo "Missing dependencies."
+    exit 1
+fi
+
+# this is printed on -h/--help
+helpmsg="Usage: musidl [options]... [url]... (-- [youtube-dl options])  
+Download music from YouTube using youtube-dl and add id3v2 metadata automatically
+
+Options:
+ -h --help              Print this message and exit
+ -v --version           Print the version and exit
+ -q --quiet             Only print errors
+ -f --format <fmt>      The audio format to use (default: mp3)
+ -a --artist <name>     Set the artist (default: detect from YouTube)
+ -A --album  <name>     Set the album title (default: detect from YouTube)
+ -t --song   <name>     Set the song title (default: detect from YouTube)
+ -g --genre  <name>     Set the genre (default: none)
+ -y --year   <year>     Set the year (default: detect from YouTube)
+ -T --track  <track>    Set the track (default: detect from playlist, otherwise none)
+ -s --show              Print information to stdout instead of downloading to file
+
+Any arguments after '--' will be sent to youtube-dl directly. These are not officially
+supported and some may cause problems."
+
+versionmsg="0.0.1"
+
+# Add a prefix to error messages
+function printStderr {
+    read -r input
+    [ -n "$input" ] && >&2 echo "[$1] $input" 
+}
+
+urls=() # The list of URLs to download
+arg_format="mp3" # The file format (-f/--format)
+# Process the arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      echo "$helpmsg"; exit 0 ;;
+    -v|--version)
+      echo "musidl $versionmsg"; exit 0 ;;
+    -q|--quiet)
+      quiet="true"; shift 1 ;;
+    -f|--format)
+      arg_format="$2"; shift 2 ;;
+    -a|--artist)
+      i_artist="$2"; shift 2 ;;
+    -A|--album)
+      i_album="$2"; shift 2 ;;
+    -t|--song)
+      i_song="$2"; shift 2 ;;
+    -g|--genre)
+      genre="$2"; shift 2 ;;
+    -y|--year)
+      i_year="$2"; shift 2 ;;
+    -T|--track)
+      i_track="$2"; shift 2 ;;
+    -s|--show)
+      arg_show="true"; shift ;;
+    --)
+      shift; break ;;
+    *)
+      urls+=("$1"); shift ;;
+  esac
+done
+
+# Exit if no URLs are given
+[ ${#urls[@]} -eq 0 ] && >&2 echo "[musidl] no URLs provided. Run '$0 --help' for help." && exit 1
+
+ytdl_args=( "$@" )
+
+# Download metadata from all the URLs
+[ -z "$quiet" ] && echo "[musidl] downloading data..."
+data="$(youtube-dl -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "youtube-dl"))"
+[ -z "$data" ] && echo "[musidl] youtube-dl returned nothing, exiting" | printStderr "musidl" && exit 1
+
+# Create a temporary file (this will be used later)
+tmpfile="$(mktemp)"
+
+IFS=$'\n'
+# Run for each video to download
+for line in $data; do
+    # Use jq to extract data from the metadata. The following options are considered in order:
+    # Artist: artist, channel name
+    # Album: album, playlist name, none
+    # Song name: track, video title
+    # Year: release year, upload date
+    # Track number: playlist index, none
+    readarray -t songdata <<< "$(echo "$line" | jq -r \
+        'if .artist then .artist else .channel end, if .album then .album else if .playlist_title then .playlist_title else "" end end, if .track then .track else .title end, if .release_year then .release_year else .upload_date end, if .playlist_index then .playlist_index else "" end, .webpage_url' \
+        2> >(printStderr "jq"))"
+
+    [ "${#songdata[@]}" -eq 0 ] && >&2 echo "[musidl] could not parse JSON, skipping" && continue
+
+    # If arguments are set manually prefer them, otherwise use ones from YouTube
+    if [ -n "$i_artist" ]; then artist="$i_artist"; else
+        artist="${songdata[0]}"
+    fi
+    if [ -n "$i_album" ]; then album="$i_album"; else
+        album="${songdata[1]}"
+    fi
+    if [ -n "$i_song" ]; then song="$i_song"; else
+        song="${songdata[2]}"
+    fi
+    if [ -n "$i_year" ]; then year="$i_year"; else
+        year="$(echo "${songdata[3]}" | head -c 4)"
+    fi
+    if [ -n "$i_track" ]; then track="$i_track"; else
+        track="${songdata[4]}"
+    fi
+    url="${songdata[5]}"
+
+    # If -s/--show is passed, show the data and continue
+    if [ -n "$arg_show" ]; then
+        echo "URL: $url"
+        [ -n "$artist" ] && echo "Artist: $artist"
+        [ -n "$album" ] && echo "Album: $album"
+        [ -n "$song" ] && echo "Song: $song"
+        [ -n "$genre" ] && echo "Genre: $genre"
+        [ -n "$year" ] && echo "Year: $year"
+        [ -n "$track" ] && echo "Track: $track"
+        continue
+    fi
+
+    [ -z "$quiet" ] && echo "[musidl] downloading $url"
+
+    # Download the video,
+    # Print all errors,
+    # Find the filename and save it to a tempfile; add a prefix to the messages,
+    # And only print messages if quiet is off
+    stdbuf -o0 youtube-dl --no-progress --extract-audio --audio-format="$arg_format" "${ytdl_args[@]}" "$url" \
+        2> >(printStderr "youtube-dl") \
+        | stdbuf -o0 sed -e '/^\[ffmpeg\] Destination: /w '"$tmpfile" -e 's/^/[youtube-dl] /' \
+        | ( if [ -z "$quiet" ]; then stdbuf -o0 cat; else cat > /dev/null; fi )                                 
+
+    # Extract filename from the temporary file
+    filename=$(cut -c 23- < "$tmpfile") 
+
+    # use id3v2 to set each property on the file
+    if [ -f "$filename" ]; then
+        [ -n "$artist" ] && id3v2 --artist "$artist" "$filename"
+        [ -n "$album" ] && id3v2 --album "$album" "$filename"
+        [ -n "$song" ] && id3v2 --song "$song" "$filename"
+        [ -n "$genre" ] && id3v2 --genre "$genre" "$filename"
+        [ -n "$year" ] && id3v2 --year "$year" "$filename"
+        [ -n "$track" ] && id3v2 --track "$track" "$filename"
+        [ -z "$quiet" ] && echo "[musidl] finished with $filename"
+    else
+        >&2 echo "[musidl] an error occured during downloading, skipping..."
+    fi
+done
+
+[ -z "$quiet" ] && echo "[musidl] cleaning up..."
+# Delete the temporary file
+rm "$tmpfile"
