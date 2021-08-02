@@ -17,18 +17,19 @@ Help information is also available by running `musidl --help`
 Usage: `musidl [options]... [url]... (-- [youtube-dl options])`
 
 Options:
+
 | Flag              | Argument | Description                                                   |
 |-------------------|----------|---------------------------------------------------------------|
 | `-h`, `--help`    |          | Show help information and exit                                |
 | `-v`, `--version` |          | Show the version and exit                                     |
 | `-q`, `--quiet`   |          | Only print errors                                             |
-| `-f`, `--format`  | <fmt>    | The audio format to use (default: mp3)                        |
-| `-a`, `--artist`  | <name>   | The audio format to use (default: mp3)                        |
-| `-A`, `--album`   | <name>   | Set the album title (default: detect from YouTube)            |
-| `-t`, `--song `   | <name>   | Set the song title (default: detect from YouTube)             |
-| `-g`, `--genre`   | <name>   | Set the genre (default: none)                                 |
-| `-y`, `--year `   | <year>   | Set the year (default: detect from YouTube)                   |
-| `-T`, `--track`   | <track>  | Set the track (default: detect from playlist, otherwise none) |
+| `-f`, `--format`  | `fmt`    | The audio format to use (default: mp3)                        |
+| `-a`, `--artist`  | `name`   | The audio format to use (default: mp3)                        |
+| `-A`, `--album`   | `name`   | Set the album title (default: detect from YouTube)            |
+| `-t`, `--song `   | `name`   | Set the song title (default: detect from YouTube)             |
+| `-g`, `--genre`   | `name`   | Set the genre (default: none)                                 |
+| `-y`, `--year `   | `year`   | Set the year (default: detect from YouTube)                   |
+| `-T`, `--track`   | `track`  | Set the track (default: detect from playlist, otherwise none) |
 | `-s`, `--show `   |          | Print information to stdout instead of downloading to file    |
 
 Any arguments after '--' will be sent to youtube-dl directly. These are not officially supported and some may cause problems.
