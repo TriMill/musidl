@@ -39,6 +39,7 @@ Options:
  -y --year   <year>     Set the year (default: detect from YouTube)
  -T --track  <track>    Set the track (default: detect from playlist, otherwise none)
  -s --show              Print information to stdout instead of downloading to file
+ --color     <when>     Enable or disable colored output. <when> must be always, auto (default), or never
 
 Any arguments after '--' will be sent to youtube-dl directly. These are not officially
 supported and some may cause problems."
@@ -78,6 +79,8 @@ while [[ $# -gt 0 ]]; do
       i_track="$2"; shift 2 ;;
     -s|--show)
       arg_show="true"; shift ;;
+    --color)
+      color_mode="$2"; shift 2 ;;
     --)
       shift; break ;;
     *)
@@ -85,15 +88,40 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$color_mode" in
+    always)
+        color_enabled="true" ;;
+    never)
+        ;;
+    auto|"")
+        if tput colors &>/dev/null; then
+            color_enabled="true"
+        fi ;;
+    *)
+        >&2 echo "[musidl] invalid argument for --color: $color_mode" && exit 1
+esac
+
+if [ -n "$color_enabled" ]; then
+    pref_musidl=$"\x1b[32m[musidl]\x1b[0m"
+    pref_ytdl=$"\x1b[36m[youtube-dl]\x1b[0m"
+    pref_jq=$"\x1b[35m[jq]\x1b[0m"
+    errorstr=$"\x1b[31;1mERROR:\x1b[0m"
+else
+    pref_musidl="[musidl]"
+    pref_ytdl="[youtube-dl]"
+    pref_jq="[jq]"
+    errorstr="ERROR:"
+fi
+
 # Exit if no URLs are given
-[ ${#urls[@]} -eq 0 ] && >&2 echo "[musidl] no URLs provided. Run '$0 --help' for help." && exit 1
+[ ${#urls[@]} -eq 0 ] && >&2 echo -e "$pref_musidl $errorstr no URLs provided. Run '$0 --help' for help." && exit 1
 
 ytdl_args=( "$@" )
 
 # Download metadata from all the URLs
-[ -z "$quiet" ] && echo "[musidl] downloading data..."
+[ -z "$quiet" ] && echo -e "$pref_musidl downloading data..."
 data="$(youtube-dl -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "youtube-dl"))"
-[ -z "$data" ] && echo "[musidl] youtube-dl returned nothing, exiting" | printStderr "musidl" && exit 1
+[ -z "$data" ] && >&2 echo -e "$pref_musidl $errorstr youtube-dl returned nothing, exiting" && exit 1
 
 # Create a temporary file (this will be used later)
 tmpfile="$(mktemp)"
@@ -109,9 +137,9 @@ for line in $data; do
     # Track number: playlist index, none
     readarray -t songdata <<< "$(echo "$line" | jq -r \
         'if .artist then .artist else .channel end, if .album then .album else if .playlist_title then .playlist_title else "" end end, if .track then .track else .title end, if .release_year then .release_year else .upload_date end, if .playlist_index then .playlist_index else "" end, .webpage_url' \
-        2> >(printStderr "jq"))"
+        2> >(printStderr "$pref_jq"))"
 
-    [ "${#songdata[@]}" -eq 0 ] && >&2 echo "[musidl] could not parse JSON, skipping" && continue
+    [ "${#songdata[@]}" -eq 0 ] && >&2 echo -e "$pref_musidl $errorstr could not parse JSON, skipping" && continue
 
     # If arguments are set manually prefer them, otherwise use ones from YouTube
     if [ -n "$i_artist" ]; then artist="$i_artist"; else
@@ -143,7 +171,7 @@ for line in $data; do
         continue
     fi
 
-    [ -z "$quiet" ] && echo "[musidl] downloading $url"
+    [ -z "$quiet" ] && echo -e "$pref_musidl downloading $url"
 
     # Download the video,
     # Print all errors,
@@ -151,7 +179,7 @@ for line in $data; do
     # And only print messages if quiet is off
     stdbuf -o0 youtube-dl --no-progress --extract-audio --audio-format="$arg_format" "${ytdl_args[@]}" "$url" \
         2> >(printStderr "youtube-dl") \
-        | stdbuf -o0 sed -e '/^\[ffmpeg\] Destination: /w '"$tmpfile" -e 's/^/[youtube-dl] /' \
+        | stdbuf -o0 sed -e '/^\[ffmpeg\] Destination: /w '"$tmpfile" -e 's/^/'"$pref_ytdl"' /' \
         | ( if [ -z "$quiet" ]; then stdbuf -o0 cat; else cat > /dev/null; fi )                                 
 
     # Extract filename from the temporary file
@@ -165,12 +193,12 @@ for line in $data; do
         [ -n "$genre" ] && id3v2 --genre "$genre" "$filename"
         [ -n "$year" ] && id3v2 --year "$year" "$filename"
         [ -n "$track" ] && id3v2 --track "$track" "$filename"
-        [ -z "$quiet" ] && echo "[musidl] finished with $filename"
+        [ -z "$quiet" ] && echo -e "$pref_musidl finished with $filename"
     else
-        >&2 echo "[musidl] an error occured during downloading, skipping..."
+        >&2 echo -e "$pref_musidl $errorstr an error occured during downloading, skipping..."
     fi
 done
 
-[ -z "$quiet" ] && echo "[musidl] cleaning up..."
+[ -z "$quiet" ] && echo -e "$pref_musidl cleaning up..."
 # Delete the temporary file
 rm "$tmpfile"
