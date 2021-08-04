@@ -39,6 +39,7 @@ Options:
  -y --year   <year>     Set the year (default: detect from YouTube)
  -T --track  <track>    Set the track (default: detect from playlist, otherwise none)
  -s --show              Print information to stdout instead of downloading to file
+ -o --output            Set the template used for filenames. See the youtube-dl documentation for more info
  --color     <when>     Enable or disable colored output. <when> must be always, auto (default), or never
 
 Any arguments after '--' will be sent to youtube-dl directly. These are not officially
@@ -49,11 +50,12 @@ versionmsg="0.0.1"
 # Add a prefix to error messages
 function printStderr {
     read -r input
-    [ -n "$input" ] && >&2 echo "[$1] $input" 
+    [ -n "$input" ] && >&2 echo -e "[$1] $input" 
 }
 
 urls=() # The list of URLs to download
 arg_format="mp3" # The file format (-f/--format)
+output_format=()
 # Process the arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,6 +81,8 @@ while [[ $# -gt 0 ]]; do
       i_track="$2"; shift 2 ;;
     -s|--show)
       arg_show="true"; shift ;;
+    -o|--output)
+      output_format=( "-o" "$2" ); shift 2 ;;
     --color)
       color_mode="$2"; shift 2 ;;
     --)
@@ -118,23 +122,46 @@ fi
 
 ytdl_args=( "$@" )
 
+IFS=$'\n'
+
 # Download metadata from all the URLs
 [ -z "$quiet" ] && echo -e "$pref_musidl downloading data..."
-data="$(youtube-dl -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "youtube-dl"))"
+data=($(youtube-dl -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "$pref_ytdl")))
 [ -z "$data" ] && >&2 echo -e "$pref_musidl $errorstr youtube-dl returned nothing, exiting" && exit 1
 
-# Create a temporary file (this will be used later)
-tmpfile="$(mktemp)"
+[ -z "$quiet" ] && echo -e "$pref_musidl downloading videos..."
 
-IFS=$'\n'
-# Run for each video to download
-for line in $data; do
+# Download the video,
+# Print all errors,
+# Add a prefix to the messages,
+# And only print messages if quiet is off
+if [ -z "$show" ]; then
+    stdbuf -o0 youtube-dl --no-progress --extract-audio -f bestaudio \
+        --audio-format="$arg_format" "${ytdl_args[@]}" ${output_format[@]} "${urls[@]}" \
+        2> >(printStderr "$pref_ytdl") \
+        | stdbuf -o0 sed -e 's/^/'"$pref_ytdl"' /' \
+        | ( if [ -z "$quiet" ]; then stdbuf -o0 cat; else cat > /dev/null; fi )
+fi
+
+# Get the filenames
+filenames=($(youtube-dl --get-filename --extract-audio -f bestaudio --audio-format="$arg_format" "${ytdl_args[@]}" ${output_format[@]} "${urls[@]}"))
+
+# Run for each video to tag
+for i in "${!data[@]}"; do
+    line="${data[i]}"
+    filename="${filenames[i]%.*}"."$arg_format"
+
+    if ! [ -f "$filename" ]; then
+        >&2 echo -e "$pref_musidl $errorstr failed to find $filename, skipping..."
+        continue
+    fi
     # Use jq to extract data from the metadata. The following options are considered in order:
     # Artist: artist, channel name
     # Album: album, playlist name, none
     # Song name: track, video title
     # Year: release year, upload date
     # Track number: playlist index, none
+    # Video URL
     readarray -t songdata <<< "$(echo "$line" | jq -r \
         'if .artist then .artist else .channel end, if .album then .album else if .playlist_title then .playlist_title else "" end end, if .track then .track else .title end, if .release_year then .release_year else .upload_date end, if .playlist_index then .playlist_index else "" end, .webpage_url' \
         2> >(printStderr "$pref_jq"))"
@@ -171,34 +198,13 @@ for line in $data; do
         continue
     fi
 
-    [ -z "$quiet" ] && echo -e "$pref_musidl downloading $url"
-
-    # Download the video,
-    # Print all errors,
-    # Find the filename and save it to a tempfile; add a prefix to the messages,
-    # And only print messages if quiet is off
-    stdbuf -o0 youtube-dl --no-progress --extract-audio --audio-format="$arg_format" "${ytdl_args[@]}" "$url" \
-        2> >(printStderr "youtube-dl") \
-        | stdbuf -o0 sed -e '/^\[ffmpeg\] Destination: /w '"$tmpfile" -e 's/^/'"$pref_ytdl"' /' \
-        | ( if [ -z "$quiet" ]; then stdbuf -o0 cat; else cat > /dev/null; fi )                                 
-
-    # Extract filename from the temporary file
-    filename=$(cut -c 23- < "$tmpfile") 
-
-    # use id3v2 to set each property on the file
-    if [ -f "$filename" ]; then
-        [ -n "$artist" ] && id3v2 --artist "$artist" "$filename"
-        [ -n "$album" ] && id3v2 --album "$album" "$filename"
-        [ -n "$song" ] && id3v2 --song "$song" "$filename"
-        [ -n "$genre" ] && id3v2 --genre "$genre" "$filename"
-        [ -n "$year" ] && id3v2 --year "$year" "$filename"
-        [ -n "$track" ] && id3v2 --track "$track" "$filename"
-        [ -z "$quiet" ] && echo -e "$pref_musidl finished with $filename"
-    else
-        >&2 echo -e "$pref_musidl $errorstr an error occured during downloading, skipping..."
-    fi
+    [ -z "$quiet" ] && echo -e "$pref_musidl tagging $song - $artist ($url)"
+    [ -n "$artist" ] && id3v2 --artist "$artist" "$filename"
+    [ -n "$album" ] && id3v2 --album "$album" "$filename"
+    [ -n "$song" ] && id3v2 --song "$song" "$filename"
+    [ -n "$genre" ] && id3v2 --genre "$genre" "$filename"
+    [ -n "$year" ] && id3v2 --year "$year" "$filename"
+    [ -n "$track" ] && id3v2 --track "$track" "$filename"
 done
 
-[ -z "$quiet" ] && echo -e "$pref_musidl cleaning up..."
-# Delete the temporary file
-rm "$tmpfile"
+[ -z "$quiet" ] && echo -e "$pref_musidl done!"

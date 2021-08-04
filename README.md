@@ -31,6 +31,7 @@ Options:
 | `-y`, `--year `   | `year`   | Set the year (default: detect from YouTube)                                               |
 | `-T`, `--track`   | `track`  | Set the track (default: detect from playlist, otherwise none)                             |
 | `-s`, `--show `   |          | Print information to stdout instead of downloading to file                                |
+| `-o`, `--output ` |          | Set the template used for filenames. See the `youtube-dl` documentation for more info     |
 | `--color`         | `when`   | Enable or disable colored output. `<when>` must be `always`, `auto` (default), or `never` |
 
 Any arguments after '--' will be sent to youtube-dl directly. These are not officially supported and some may cause problems.
