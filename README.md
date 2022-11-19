@@ -1,7 +1,7 @@
 # musidl
 musidl is a simple command-line utility written in Bash for downloading music from YouTube with id3 tags (used by media players to display the artist, album, etc.). It is licensed under the GNU GPLv3.
 
-musidl requires [youtube-dl](https://github.com/ytdl-org/youtube-dl) to get information about and download the audio from videos, [jq](https://github.com/stedolan/jq) to process JSON, and [id3v2](http://id3v2.sourceforge.net/) to add id3 tags.
+musidl requires [yt-dlp](https://github.com/yt-dlp/yt-dlp) to get information about and download the audio from videos, [jq](https://github.com/stedolan/jq) to process JSON, and [id3v2](http://id3v2.sourceforge.net/) to add id3 tags.
 
 ## Installation
 
@@ -14,7 +14,7 @@ sudo ln -s $PWD/musidl /usr/local/bin/musidl
 
 Help information is also available by running `musidl --help`
 
-Usage: `musidl [options]... [url]... (-- [youtube-dl options])`
+Usage: `musidl [options]... [url]... (-- [yt-dlp options])`
 
 Options:
 
@@ -31,7 +31,7 @@ Options:
 | `-y`, `--year `   | `year`   | Set the year (default: detect from YouTube)                                               |
 | `-T`, `--track`   | `track`  | Set the track (default: detect from playlist, otherwise none)                             |
 | `-s`, `--show `   |          | Print information to stdout instead of downloading to file                                |
-| `-o`, `--output ` |          | Set the template used for filenames. See the `youtube-dl` documentation for more info     |
+| `-o`, `--output ` |          | Set the template used for filenames. See the `yt-dlp` documentation for more info     |
 | `--color`         | `when`   | Enable or disable colored output. `<when>` must be `always`, `auto` (default), or `never` |
 
-Any arguments after '--' will be sent to youtube-dl directly. These are not officially supported and some may cause problems.
+Any arguments after '--' will be sent to yt-dlp directly. These are not officially supported and some may cause problems.

@@ -18,14 +18,14 @@
 
 
 # check to make sure all commands are available before running
-if ! (command -v "youtube-dl" && command -v "jq" && command -v "id3v2") &>/dev/null; then
+if ! (command -v "yt-dlp" && command -v "jq" && command -v "id3v2") &>/dev/null; then
     >&2 echo "Missing dependencies."
     exit 1
 fi
 
 # this is printed on -h/--help
-helpmsg="Usage: musidl [options]... [url]... (-- [youtube-dl options])  
-Download music from YouTube using youtube-dl and add id3v2 metadata automatically
+helpmsg="Usage: musidl [options]... [url]... (-- [yt-dlp options])  
+Download music from YouTube using yt-dlp and add id3v2 metadata automatically
 
 Options:
  -h --help              Print this message and exit
@@ -39,10 +39,10 @@ Options:
  -y --year   <year>     Set the year (default: detect from YouTube)
  -T --track  <track>    Set the track (default: detect from playlist, otherwise none)
  -s --show              Print information to stdout instead of downloading to file
- -o --output            Set the template used for filenames. See the youtube-dl documentation for more info
+ -o --output            Set the template used for filenames. See the yt-dlp documentation for more info
  --color     <when>     Enable or disable colored output. <when> must be always, auto (default), or never
 
-Any arguments after '--' will be sent to youtube-dl directly. These are not officially
+Any arguments after '--' will be sent to yt-dlp directly. These are not officially
 supported and some may cause problems."
 
 versionmsg="0.0.1"
@@ -107,12 +107,12 @@ esac
 
 if [ -n "$color_enabled" ]; then
     pref_musidl=$"\x1b[32m[musidl]\x1b[0m"
-    pref_ytdl=$"\x1b[36m[youtube-dl]\x1b[0m"
+    pref_ytdl=$"\x1b[36m[yt-dlp]\x1b[0m"
     pref_jq=$"\x1b[35m[jq]\x1b[0m"
     errorstr=$"\x1b[31;1mERROR:\x1b[0m"
 else
     pref_musidl="[musidl]"
-    pref_ytdl="[youtube-dl]"
+    pref_ytdl="[yt-dlp]"
     pref_jq="[jq]"
     errorstr="ERROR:"
 fi
@@ -126,8 +126,8 @@ IFS=$'\n'
 
 # Download metadata from all the URLs
 [ -z "$quiet" ] && echo -e "$pref_musidl downloading data..."
-data=($(youtube-dl -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "$pref_ytdl")))
-[ -z "$data" ] && >&2 echo -e "$pref_musidl $errorstr youtube-dl returned nothing, exiting" && exit 1
+data=($(yt-dlp -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "$pref_ytdl")))
+[ -z "$data" ] && >&2 echo -e "$pref_musidl $errorstr yt-dlp returned nothing, exiting" && exit 1
 
 [ -z "$quiet" ] && echo -e "$pref_musidl downloading videos..."
 
@@ -136,7 +136,7 @@ data=($(youtube-dl -j "${ytdl_args[@]}" "${urls[@]}" 2> >(printStderr "$pref_ytd
 # Add a prefix to the messages,
 # And only print messages if quiet is off
 if [ -z "$show" ]; then
-    stdbuf -o0 youtube-dl --no-progress --extract-audio -f bestaudio \
+    stdbuf -o0 yt-dlp --no-progress --extract-audio -f bestaudio \
         --audio-format="$arg_format" "${ytdl_args[@]}" ${output_format[@]} "${urls[@]}" \
         2> >(printStderr "$pref_ytdl") \
         | stdbuf -o0 sed -e 's/^/'"$pref_ytdl"' /' \
@@ -144,7 +144,7 @@ if [ -z "$show" ]; then
 fi
 
 # Get the filenames
-filenames=($(youtube-dl --get-filename --extract-audio -f bestaudio --audio-format="$arg_format" "${ytdl_args[@]}" ${output_format[@]} "${urls[@]}"))
+filenames=($(yt-dlp --get-filename --extract-audio -f bestaudio --audio-format="$arg_format" "${ytdl_args[@]}" ${output_format[@]} "${urls[@]}"))
 
 # Run for each video to tag
 for i in "${!data[@]}"; do
