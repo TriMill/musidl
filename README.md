@@ -1,7 +1,7 @@
 # musidl
-musidl is a simple command-line utility written in Bash for downloading music from YouTube with id3 tags (used by media players to display the artist, album, etc.). It is licensed under the GNU GPLv3.
+musidl is a simple command-line utility written in Bash for downloading music from YouTube with ID3v2 tags (used by media players to display the artist, album, etc.). It is licensed under the GNU GPLv3.
 
-musidl requires [yt-dlp](https://github.com/yt-dlp/yt-dlp) to get information about and download the audio from videos, [jq](https://github.com/stedolan/jq) to process JSON, and [id3v2](http://id3v2.sourceforge.net/) to add id3 tags.
+musidl requires [yt-dlp](https://github.com/yt-dlp/yt-dlp) to get information about and download the audio from videos, [jq](https://github.com/stedolan/jq) to process JSON, and [eyeD3](https://github.com/nicfit/eyeD3) to add ID3v2 tags.
 
 ## Installation
 

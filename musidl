@@ -18,14 +18,14 @@
 
 
 # check to make sure all commands are available before running
-if ! (command -v "yt-dlp" && command -v "jq" && command -v "id3v2") &>/dev/null; then
+if ! (command -v "yt-dlp" && command -v "jq" && command -v "eyeD3") &>/dev/null; then
     >&2 echo "Missing dependencies."
     exit 1
 fi
 
 # this is printed on -h/--help
 helpmsg="Usage: musidl [options]... [url]... (-- [yt-dlp options])  
-Download music from YouTube using yt-dlp and add id3v2 metadata automatically
+Download music from YouTube using yt-dlp and add ID3v2 metadata automatically
 
 Options:
  -h --help              Print this message and exit
@@ -45,7 +45,7 @@ Options:
 Any arguments after '--' will be sent to yt-dlp directly. These are not officially
 supported and some may cause problems."
 
-versionmsg="0.0.1"
+versionmsg="1.0.0"
 
 # Add a prefix to error messages
 function printStderr {
@@ -175,8 +175,8 @@ for i in "${!data[@]}"; do
     if [ -n "$i_album" ]; then album="$i_album"; else
         album="${songdata[1]}"
     fi
-    if [ -n "$i_song" ]; then song="$i_song"; else
-        song="${songdata[2]}"
+    if [ -n "$i_song" ]; then title="$i_song"; else
+        title="${songdata[2]}"
     fi
     if [ -n "$i_year" ]; then year="$i_year"; else
         year="$(echo "${songdata[3]}" | head -c 4)"
@@ -191,20 +191,20 @@ for i in "${!data[@]}"; do
         echo "URL: $url"
         [ -n "$artist" ] && echo "Artist: $artist"
         [ -n "$album" ] && echo "Album: $album"
-        [ -n "$song" ] && echo "Song: $song"
+        [ -n "$title" ] && echo "Title: $title"
         [ -n "$genre" ] && echo "Genre: $genre"
         [ -n "$year" ] && echo "Year: $year"
         [ -n "$track" ] && echo "Track: $track"
         continue
     fi
 
-    [ -z "$quiet" ] && echo -e "$pref_musidl tagging $song - $artist ($url)"
-    [ -n "$artist" ] && id3v2 --artist "$artist" "$filename"
-    [ -n "$album" ] && id3v2 --album "$album" "$filename"
-    [ -n "$song" ] && id3v2 --song "$song" "$filename"
-    [ -n "$genre" ] && id3v2 --genre "$genre" "$filename"
-    [ -n "$year" ] && id3v2 --year "$year" "$filename"
-    [ -n "$track" ] && id3v2 --track "$track" "$filename"
+    [ -z "$quiet" ] && echo -e "$pref_musidl tagging $title - $artist ($url)"
+    [ -n "$artist" ] && eyeD3 --artist "$artist" "$filename" --encoding utf8 >/dev/null
+    [ -n "$album" ] && eyeD3 --album "$album" "$filename" --encoding utf8 >/dev/null
+    [ -n "$title" ] && eyeD3 --title "$title" "$filename" --encoding utf8 >/dev/null
+    [ -n "$genre" ] && eyeD3 --genre "$genre" "$filename" --encoding utf8 >/dev/null
+    [ -n "$year" ] && eyeD3 --release-year "$year" "$filename" >/dev/null
+    [ -n "$track" ] && eyeD3 --track "$track" "$filename" >/dev/null
 done
 
 [ -z "$quiet" ] && echo -e "$pref_musidl done!"
